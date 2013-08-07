@@ -217,6 +217,16 @@ fi
 # Functions
 # ---------
 
+# use `pkill` instead of `ps aux` if pkill exists.  It's more reliable
+PKILL_CMD=$(which pkill)
+PKILL() {
+    if [ -n "$PKILL_CMD" ]; then
+	$PKILL_CMD -f "$@"
+    else
+	ps wwaux | awk '/'"$1"'/ { print $2 }' | while read pid; do kill "$pid"; done
+    fi
+}
+
 # configure_neutron()
 # Set common config for all neutron server and agents.
 function configure_neutron() {
@@ -436,15 +446,16 @@ function start_neutron_agents() {
     fi
 }
 
+
+
+
 # stop_neutron() - Stop running processes (non-screen)
 function stop_neutron() {
     if is_service_enabled q-dhcp; then
-        pid=$(ps aux | awk '/[d]nsmasq.+interface=(tap|ns-)/ { print $2 }')
-        [ ! -z "$pid" ] && sudo kill -9 $pid
+        PKILL '[d]nsmasq.+interface=(tap|ns-)'
     fi
     if is_service_enabled q-meta; then
-        pid=$(ps aux | awk '/neutron-ns-metadata-proxy/ { print $2 }')
-        [ ! -z "$pid" ] && sudo kill -9 $pid
+        PKILL 'neutron-ns-metadata-proxy'
     fi
 }
 
