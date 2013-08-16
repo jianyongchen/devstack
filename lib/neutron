@@ -221,9 +221,9 @@ fi
 PKILL_CMD=$(which pkill)
 PKILL() {
     if [ -n "$PKILL_CMD" ]; then
-	$PKILL_CMD -f "$@"
+	sudo $PKILL_CMD -f "$@"
     else
-	ps wwaux | awk '/'"$1"'/ { print $2 }' | while read pid; do kill "$pid"; done
+	ps wwaux | awk '/'"$1"'/ { print $2 }' | while read pid; do sudo kill "$pid"; done
     fi
 }
 
