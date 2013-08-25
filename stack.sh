@@ -234,8 +234,10 @@ else
 fi
 
 # Create the destination directory and ensure it is writable by the user
+# and read/executable by everybody for daemons (e.g. apache run for horizon)
 sudo mkdir -p $DEST
 sudo chown -R $STACK_USER $DEST
+chmod 0755 $DEST
 
 # a basic test for $DEST path permissions (fatal on error unless skipped)
 check_path_perm_sanity ${DEST}
@@ -249,6 +251,9 @@ OFFLINE=`trueorfalse False $OFFLINE`
 # the destination git repository does not exist during the ``git_clone``
 # operation.
 ERROR_ON_CLONE=`trueorfalse False $ERROR_ON_CLONE`
+
+# Whether to enable the debug log level in OpenStack services
+ENABLE_DEBUG_LOG_LEVEL=`trueorfalse True $ENABLE_DEBUG_LOG_LEVEL`
 
 # Destination path for service data
 DATA_DIR=${DATA_DIR:-${DEST}/data}
@@ -580,6 +585,10 @@ source $TOP_DIR/tools/install_prereqs.sh
 
 # Configure an appropriate python environment
 $TOP_DIR/tools/install_pip.sh
+
+# Do the ugly hacks for borken packages and distros
+$TOP_DIR/tools/fixup_stuff.sh
+
 
 # System-specific preconfigure
 # ============================

@@ -30,7 +30,7 @@ set +o xtrace
 HEAT_DIR=$DEST/heat
 HEATCLIENT_DIR=$DEST/python-heatclient
 HEAT_AUTH_CACHE_DIR=${HEAT_AUTH_CACHE_DIR:-/var/cache/heat}
-
+HEAT_STANDALONE=`trueorfalse False $HEAT_STANDALONE`
 
 # Functions
 # ---------
@@ -68,7 +68,7 @@ function configure_heat() {
     # Cloudformation API
     HEAT_API_CFN_CONF=$HEAT_CONF_DIR/heat-api-cfn.conf
     cp $HEAT_DIR/etc/heat/heat-api-cfn.conf $HEAT_API_CFN_CONF
-    iniset $HEAT_API_CFN_CONF DEFAULT debug True
+    iniset $HEAT_API_CFN_CONF DEFAULT debug $ENABLE_DEBUG_LOG_LEVEL
     inicomment $HEAT_API_CFN_CONF DEFAULT log_file
     iniset $HEAT_API_CFN_CONF DEFAULT use_syslog $SYSLOG
     iniset $HEAT_API_CFN_CONF DEFAULT bind_host $HEAT_API_CFN_HOST
@@ -83,13 +83,14 @@ function configure_heat() {
     iniset $HEAT_API_CFN_CONF keystone_authtoken signing_dir $HEAT_AUTH_CACHE_DIR/api-cfn
     iniset $HEAT_API_CFN_CONF ec2authtoken auth_uri $KEYSTONE_SERVICE_PROTOCOL://$KEYSTONE_SERVICE_HOST:$KEYSTONE_SERVICE_PORT/v2.0
     iniset $HEAT_API_CFN_CONF ec2authtoken keystone_ec2_uri $KEYSTONE_SERVICE_PROTOCOL://$KEYSTONE_SERVICE_HOST:$KEYSTONE_SERVICE_PORT/v2.0/ec2tokens
+    [[ "$HEAT_STANDALONE" = "True" ]] && iniset $HEAT_API_CFN_CONF paste_deploy flavor standalone
 
     iniset_rpc_backend heat $HEAT_API_CFN_CONF DEFAULT
 
     # OpenStack API
     HEAT_API_CONF=$HEAT_CONF_DIR/heat-api.conf
     cp $HEAT_DIR/etc/heat/heat-api.conf $HEAT_API_CONF
-    iniset $HEAT_API_CONF DEFAULT debug True
+    iniset $HEAT_API_CONF DEFAULT debug $ENABLE_DEBUG_LOG_LEVEL
     inicomment $HEAT_API_CONF DEFAULT log_file
     iniset $HEAT_API_CONF DEFAULT use_syslog $SYSLOG
     iniset $HEAT_API_CONF DEFAULT bind_host $HEAT_API_HOST
@@ -104,14 +105,14 @@ function configure_heat() {
     iniset $HEAT_API_CONF keystone_authtoken signing_dir $HEAT_AUTH_CACHE_DIR/api
     iniset $HEAT_API_CONF ec2authtoken auth_uri $KEYSTONE_SERVICE_PROTOCOL://$KEYSTONE_SERVICE_HOST:$KEYSTONE_SERVICE_PORT/v2.0
     iniset $HEAT_API_CONF ec2authtoken keystone_ec2_uri $KEYSTONE_SERVICE_PROTOCOL://$KEYSTONE_SERVICE_HOST:$KEYSTONE_SERVICE_PORT/v2.0/ec2tokens
-
+    [[ "$HEAT_STANDALONE" = "True" ]] && iniset $HEAT_API_CONF paste_deploy flavor standalone
     iniset_rpc_backend heat $HEAT_API_CONF DEFAULT
 
 
     # engine
     HEAT_ENGINE_CONF=$HEAT_CONF_DIR/heat-engine.conf
     cp $HEAT_DIR/etc/heat/heat-engine.conf $HEAT_ENGINE_CONF
-    iniset $HEAT_ENGINE_CONF DEFAULT debug True
+    iniset $HEAT_ENGINE_CONF DEFAULT debug $ENABLE_DEBUG_LOG_LEVEL
     inicomment $HEAT_ENGINE_CONF DEFAULT log_file
     iniset $HEAT_ENGINE_CONF DEFAULT use_syslog $SYSLOG
     iniset $HEAT_ENGINE_CONF DEFAULT bind_host $HEAT_ENGINE_HOST
@@ -127,7 +128,7 @@ function configure_heat() {
     # Cloudwatch API
     HEAT_API_CW_CONF=$HEAT_CONF_DIR/heat-api-cloudwatch.conf
     cp $HEAT_DIR/etc/heat/heat-api-cloudwatch.conf $HEAT_API_CW_CONF
-    iniset $HEAT_API_CW_CONF DEFAULT debug True
+    iniset $HEAT_API_CW_CONF DEFAULT debug $ENABLE_DEBUG_LOG_LEVEL
     inicomment $HEAT_API_CW_CONF DEFAULT log_file
     iniset $HEAT_API_CW_CONF DEFAULT use_syslog $SYSLOG
     iniset $HEAT_API_CW_CONF DEFAULT bind_host $HEAT_API_CW_HOST
@@ -142,6 +143,7 @@ function configure_heat() {
     iniset $HEAT_API_CW_CONF keystone_authtoken signing_dir $HEAT_AUTH_CACHE_DIR/api-cloudwatch
     iniset $HEAT_API_CW_CONF ec2authtoken auth_uri $KEYSTONE_SERVICE_PROTOCOL://$KEYSTONE_SERVICE_HOST:$KEYSTONE_SERVICE_PORT/v2.0
     iniset $HEAT_API_CW_CONF ec2authtoken keystone_ec2_uri $KEYSTONE_SERVICE_PROTOCOL://$KEYSTONE_SERVICE_HOST:$KEYSTONE_SERVICE_PORT/v2.0/ec2tokens
+    [[ "$HEAT_STANDALONE" = "True" ]] && iniset $HEAT_API_CW_CONF paste_deploy flavor standalone
 
     iniset_rpc_backend heat $HEAT_API_CW_CONF DEFAULT
 
@@ -195,6 +197,21 @@ function stop_heat() {
     done
 }
 
+function disk_image_create {
+    local elements_path=$1
+    local elements=$2
+    local arch=$3
+    local output=$TOP_DIR/files/$4
+    if [[ -f "$output.qcow2" ]];
+    then
+        echo "Image file already exists: $output_file"
+    else
+        ELEMENTS_PATH=$elements_path disk-image-create \
+            $elements -a $arch -o $output
+    fi
+    # upload with fake URL so that image in $TOP_DIR/files is used
+    upload_image "http://localhost/$output.qcow2" $TOKEN
+}
 
 # Restore xtrace
 $XTRACE
