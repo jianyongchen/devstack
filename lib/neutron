@@ -612,6 +612,14 @@ function _configure_neutron_plugin_agent() {
     iniset $NEUTRON_CONF DEFAULT verbose True
     iniset $NEUTRON_CONF DEFAULT debug $ENABLE_DEBUG_LOG_LEVEL
 
+    # Define extra "DEFAULT" configuration options when q-agt is configured by
+    # defining the array ``Q_AGENT_EXTRA_DEFAULT_OPTS``.
+    # For Example: ``Q_AGENT_EXTRA_DEFAULT_OPTS=(foo=true bar=2)``
+    for I in "${Q_AGENT_EXTRA_DEFAULT_OPTS[@]}"; do
+        # Replace the first '=' with ' ' for iniset syntax
+        iniset $NEUTRON_CONF DEFAULT ${I/=/ }
+    done
+
     # Configure agent for plugin
     neutron_plugin_configure_plugin_agent
 }

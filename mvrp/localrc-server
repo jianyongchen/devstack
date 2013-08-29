@@ -1,0 +1,45 @@
+# see http://devstack.org/guides/multinode-lab.html
+STACK_DIR=$(cd $(dirname $0) && pwd)
+
+disable_service n-net
+enable_service q-svc
+enable_service q-agt
+enable_service q-dhcp
+enable_service q-l3
+enable_service q-meta
+enable_service neutron
+enable_service rabbit
+
+HOST_IP=10.207.65.72 # change this per compute node
+MULTI_HOST=1
+FLAT_INTERFACE=eth1
+FIXED_RANGE=10.88.0.0/16
+FIXED_NETWORK_SIZE=4096
+FLOATING_RANGE=192.168.42.128/25
+
+LOG=True
+DEBUG=True
+LOGFILE=$STACK_DIR/log/stack.log
+LOGDAYS=1
+Q_SRV_EXTRA_DEFAULT_OPTS=(log_dir=$STACK_DIR/log log_file=neutron.log mvrp=True)
+#Q_SRV_EXTRA_DEFAULT_OPTS=(log_dir=$STACK_DIR/log log_file=neutron.log)
+
+NEUTRON_REPO=/opt/stack/neutron
+
+Q_PLUGIN=linuxbridge
+Q_USE_DEBUG_COMMAND=True
+ENABLE_TENANT_VLANS=True
+TENANT_VLAN_RANGE=1000:1999
+PHYSICAL_NETWORK=default
+LB_PHYSICAL_INTERFACE=eth0
+
+DATABASE_PASSWORD=x
+RABBIT_PASSWORD=x
+SERVICE_TOKEN=x
+SERVICE_PASSWORD=x
+ADMIN_PASSWORD=x
+SERVICE_TOKEN=xyzpdqlazydog
+DATABASE_TYPE=mysql
+
+
+
