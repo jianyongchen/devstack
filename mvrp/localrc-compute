@@ -1,8 +1,8 @@
-HOST_IP=127.0.0.1 # change this per compute node
-SERVICE_HOST=127.0.0.1
+HOST_IP=10.207.65.73 # change this per compute node
+SERVICE_HOST=10.207.65.72
 
 # this doesn't write [vlans] without q-svc.  Isn't that necessary on compute?
-ENABLED_SERVICES=rabbit,q-agt
+ENABLED_SERVICES=n-cpu,rabbit,q-agt
 
 MYSQL_HOST=$SERVICE_HOST
 RABBIT_HOST=$SERVICE_HOST
