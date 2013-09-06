@@ -146,9 +146,10 @@ devstack supports adding specific Neutron configuration flags to the service, Op
     Variable Name             Config File  Section Modified
     -------------------------------------------------------------------------------------
     Q_SRV_EXTRA_OPTS          Plugin       `OVS` (for Open Vswitch) or `LINUX_BRIDGE` (for LinuxBridge)
+    Q_SRV_EXTRA_DEFAULT_OPTS  Service      DEFAULT
     Q_AGENT_EXTRA_AGENT_OPTS  Plugin       AGENT
     Q_AGENT_EXTRA_SRV_OPTS    Plugin       `OVS` (for Open Vswitch) or `LINUX_BRIDGE` (for LinuxBridge)
-    Q_SRV_EXTRA_DEFAULT_OPTS  Service      DEFAULT
+    Q_AGENT_EXTRA_DEFAULT_OPTS  Service      DEFAULT
 
 An example of using the variables in your `localrc` is below:
 
