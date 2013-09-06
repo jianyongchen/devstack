@@ -11,18 +11,28 @@ enable_service neutron
 enable_service rabbit
 
 HOST_IP=10.207.65.72 # change this per compute node
-MULTI_HOST=1
+#SCHEDULER=nova.scheduler.simple.SimpleScheduler
+MULTI_HOST=True
 FLAT_INTERFACE=eth1
 FIXED_RANGE=10.88.0.0/16
 FIXED_NETWORK_SIZE=4096
-FLOATING_RANGE=192.168.42.128/25
+FLOATING_RANGE=192.168.88.0/24
 
 LOG=True
 DEBUG=True
 LOGFILE=$STACK_DIR/log/stack.log
 LOGDAYS=1
-Q_SRV_EXTRA_DEFAULT_OPTS=(log_dir=$STACK_DIR/log log_file=neutron.log mvrp=True)
-#Q_SRV_EXTRA_DEFAULT_OPTS=(log_dir=$STACK_DIR/log log_file=neutron.log)
+
+
+# /etc/neutron/neutron.conf [DEFAULT]
+#Q_SRV_EXTRA_DEFAULT_OPTS=(log_config=$STACK_DIR/logging.config)
+
+# /etc/neutron/plugins/linuxbridge/linuxbridge_conf.ini [agent]
+Q_AGENT_EXTRA_AGENT_OPTS=(mvrp=True)
+
+# /etc/neutron/plugins/linuxbridge/linuxbridge_conf.ini [linux_bridge]
+# See _load_log_config in neutron/neutron/openstack/common/log.py
+Q_AGENT_EXTRA_DEFAULT_OPTS=(log_config=$STACK_DIR/logging.config)
 
 NEUTRON_REPO=/opt/stack/neutron
 
@@ -31,7 +41,7 @@ Q_USE_DEBUG_COMMAND=True
 ENABLE_TENANT_VLANS=True
 TENANT_VLAN_RANGE=1000:1999
 PHYSICAL_NETWORK=default
-LB_PHYSICAL_INTERFACE=eth0
+LB_PHYSICAL_INTERFACE=eth1
 
 DATABASE_PASSWORD=x
 RABBIT_PASSWORD=x
@@ -39,7 +49,3 @@ SERVICE_TOKEN=x
 SERVICE_PASSWORD=x
 ADMIN_PASSWORD=x
 SERVICE_TOKEN=xyzpdqlazydog
-DATABASE_TYPE=mysql
-
-
-
