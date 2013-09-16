@@ -226,6 +226,7 @@ function configure_cinder() {
         iniset $CINDER_CONF DEFAULT volume_group $VOLUME_GROUP
         iniset $CINDER_CONF DEFAULT volume_name_template ${VOLUME_NAME_PREFIX}%s
     fi
+    iniset $CINDER_CONF DEFAULT my_ip "$CINDER_SERVICE_HOST"
     iniset $CINDER_CONF DEFAULT iscsi_helper tgtadm
     iniset $CINDER_CONF DEFAULT sql_connection `database_connection_url cinder`
     iniset $CINDER_CONF DEFAULT api_paste_config $CINDER_API_PASTE_INI
@@ -289,12 +290,10 @@ function configure_cinder() {
         fi
     elif [ "$CINDER_DRIVER" == "vsphere" ]; then
         echo_summary "Using VMware vCenter driver"
-        iniset $CINDER_CONF DEFAULT enabled_backends vmware
-        iniset $CINDER_CONF vmware host_ip "$VMWAREAPI_IP"
-        iniset $CINDER_CONF vmware host_username "$VMWAREAPI_USER"
-        iniset $CINDER_CONF vmware host_password "$VMWAREAPI_PASSWORD"
-        iniset $CINDER_CONF vmware cluster_name "$VMWAREAPI_CLUSTER"
-        iniset $CINDER_CONF vmware volume_driver "cinder.volume.drivers.vmware.vmdk.VMwareVcVmdkDriver"
+        iniset $CINDER_CONF DEFAULT vmware_host_ip "$VMWAREAPI_IP"
+        iniset $CINDER_CONF DEFAULT vmware_host_username "$VMWAREAPI_USER"
+        iniset $CINDER_CONF DEFAULT vmware_host_password "$VMWAREAPI_PASSWORD"
+        iniset $CINDER_CONF DEFAULT volume_driver "cinder.volume.drivers.vmware.vmdk.VMwareVcVmdkDriver"
     fi
 
     if [[ is_fedora && $DISTRO =~ (rhel6) ]]; then
@@ -336,9 +335,9 @@ create_cinder_accounts() {
             --email=cinder@example.com \
             | grep " id " | get_field 2)
         keystone user-role-add \
-            --tenant_id $SERVICE_TENANT \
-            --user_id $CINDER_USER \
-            --role_id $ADMIN_ROLE
+            --tenant-id $SERVICE_TENANT \
+            --user-id $CINDER_USER \
+            --role-id $ADMIN_ROLE
         if [[ "$KEYSTONE_CATALOG_BACKEND" = 'sql' ]]; then
             CINDER_SERVICE=$(keystone service-create \
                 --name=cinder \

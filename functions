@@ -317,16 +317,36 @@ function get_packages() {
                 continue
             fi
 
+            # Assume we want this package
+            package=${line%#*}
+            inst_pkg=1
+
+            # Look for # dist:xxx in comment
             if [[ $line =~ (.*)#.*dist:([^ ]*) ]]; then
                 # We are using BASH regexp matching feature.
                 package=${BASH_REMATCH[1]}
                 distros=${BASH_REMATCH[2]}
                 # In bash ${VAR,,} will lowecase VAR
-                [[ ${distros,,} =~ ${DISTRO,,} ]] && echo $package
-                continue
+                # Look for a match in the distro list
+                if [[ ! ${distros,,} =~ ${DISTRO,,} ]]; then
+                    # If no match then skip this package
+                    inst_pkg=0
+                fi
             fi
 
-            echo ${line%#*}
+            # Look for # testonly in comment
+            if [[ $line =~ (.*)#.*testonly.* ]]; then
+                package=${BASH_REMATCH[1]}
+                # Are we installing test packages? (test for the default value)
+                if [[ $INSTALL_TESTONLY_PACKAGES = "False" ]]; then
+                    # If not installing test packages the skip this package
+                    inst_pkg=0
+                fi
+            fi
+
+            if [[ $inst_pkg = 1 ]]; then
+                echo $package
+            fi
         done
         IFS=$OIFS
     done
@@ -759,6 +779,7 @@ function is_running() {
 #   **glance** returns true if any service enabled start with **g-**
 #   **neutron** returns true if any service enabled start with **q-**
 #   **swift** returns true if any service enabled start with **s-**
+#   **trove** returns true if any service enabled start with **tr-**
 #   For backward compatibility if we have **swift** in ENABLED_SERVICES all the
 #   **s-** services will be enabled. This will be deprecated in the future.
 #
@@ -778,6 +799,7 @@ function is_service_enabled() {
         [[ ${service} == "ceilometer" && ${ENABLED_SERVICES} =~ "ceilometer-" ]] && return 0
         [[ ${service} == "glance" && ${ENABLED_SERVICES} =~ "g-" ]] && return 0
         [[ ${service} == "neutron" && ${ENABLED_SERVICES} =~ "q-" ]] && return 0
+        [[ ${service} == "trove" && ${ENABLED_SERVICES} =~ "tr-" ]] && return 0
         [[ ${service} == "swift" && ${ENABLED_SERVICES} =~ "s-" ]] && return 0
         [[ ${service} == s-* && ${ENABLED_SERVICES} =~ "swift" ]] && return 0
     done
@@ -912,7 +934,7 @@ function is_package_installed() {
     fi
 
     if [[ "$os_PACKAGE" = "deb" ]]; then
-        dpkg -l "$@" > /dev/null 2> /dev/null
+        dpkg -s "$@" > /dev/null 2> /dev/null
     elif [[ "$os_PACKAGE" = "rpm" ]]; then
         rpm --quiet -q "$@"
     else
@@ -1138,6 +1160,51 @@ function service_check() {
     fi
 }
 
+# Returns true if the directory is on a filesystem mounted via NFS.
+function is_nfs_directory() {
+    local mount_type=`stat -f -L -c %T $1`
+    test "$mount_type" == "nfs"
+}
+
+# Only run the command if the target file (the last arg) is not on an
+# NFS filesystem.
+function _safe_permission_operation() {
+    local args=( $@ )
+    local last
+    local sudo_cmd
+    local dir_to_check
+
+    let last="${#args[*]} - 1"
+
+    dir_to_check=${args[$last]}
+    if [ ! -d "$dir_to_check" ]; then
+        dir_to_check=`dirname "$dir_to_check"`
+    fi
+
+    if is_nfs_directory "$dir_to_check" ; then
+        return 0
+    fi
+
+    if [[ $TRACK_DEPENDS = True ]]; then
+        sudo_cmd="env"
+    else
+        sudo_cmd="sudo"
+    fi
+
+    $sudo_cmd $@
+}
+
+# Only change ownership of a file or directory if it is not on an NFS
+# filesystem.
+function safe_chown() {
+    _safe_permission_operation chown $@
+}
+
+# Only change permissions of a file or directory if it is not on an
+# NFS filesystem.
+function safe_chmod() {
+    _safe_permission_operation chmod $@
+}
 
 # ``pip install -e`` the package, which processes the dependencies
 # using pip before running `setup.py develop`
@@ -1145,11 +1212,6 @@ function service_check() {
 # setup_develop directory
 function setup_develop() {
     local project_dir=$1
-    if [[ $TRACK_DEPENDS = True ]]; then
-        SUDO_CMD="env"
-    else
-        SUDO_CMD="sudo"
-    fi
 
     echo "cd $REQUIREMENTS_DIR; $SUDO_CMD python update.py $project_dir"
 
@@ -1161,7 +1223,7 @@ function setup_develop() {
 
     pip_install -e $project_dir
     # ensure that further actions can do things like setup.py sdist
-    $SUDO_CMD chown -R $STACK_USER $1/*.egg-info
+    safe_chown -R $STACK_USER $1/*.egg-info
 }
 
 
@@ -1236,16 +1298,50 @@ function upload_image() {
     if [[ "$image_url" =~ '.vmdk' ]]; then
         IMAGE="$FILES/${IMAGE_FNAME}"
         IMAGE_NAME="${IMAGE_FNAME%.vmdk}"
-        glance --os-auth-token $token --os-image-url http://$GLANCE_HOSTPORT image-create --name "$IMAGE_NAME" --is-public=True --container-format bare --disk-format vmdk --property vmware-disktype="preallocated" < "${IMAGE}"
+
+        # Before we can upload vmdk type images to glance, we need to know it's
+        # disk type, storage adapter, and networking adapter. These values are
+        # passed to glance as custom properties. We take these values from the
+        # vmdk filename, which is expected in the following format:
+        #
+        #     <name>-<disk type>:<storage adapter>:<network adapter>
+        #
+        # If the filename does not follow the above format then the vsphere
+        # driver will supply default values.
+        property_string=`echo "$IMAGE_NAME" | grep -oP '(?<=-)(?!.*-).+:.+:.+$'`
+        if [[ ! -z "$property_string" ]]; then
+            IFS=':' read -a props <<< "$property_string"
+            vmdk_disktype="${props[0]}"
+            vmdk_adapter_type="${props[1]}"
+            vmdk_net_adapter="${props[2]}"
+        fi
+
+        glance --os-auth-token $token --os-image-url http://$GLANCE_HOSTPORT image-create --name "$IMAGE_NAME" --is-public=True --container-format bare --disk-format vmdk --property vmware-disktype="$vmdk_disktype" --property vmware_adaptertype="$vmdk_adapter_type" --property hw_vif_model="$vmdk_net_adapter" < "${IMAGE}"
         return
     fi
 
-    # XenServer-ovf-format images are provided as .vhd.tgz as well
+    # XenServer-vhd-ovf-format images are provided as .vhd.tgz
     # and should not be decompressed prior to loading
     if [[ "$image_url" =~ '.vhd.tgz' ]]; then
         IMAGE="$FILES/${IMAGE_FNAME}"
         IMAGE_NAME="${IMAGE_FNAME%.vhd.tgz}"
         glance --os-auth-token $token --os-image-url http://$GLANCE_HOSTPORT image-create --name "$IMAGE_NAME" --is-public=True --container-format=ovf --disk-format=vhd < "${IMAGE}"
+        return
+    fi
+
+    # .xen-raw.tgz suggests a Xen capable raw image inside a tgz.
+    # and should not be decompressed prior to loading.
+    # Setting metadata, so PV mode is used.
+    if [[ "$image_url" =~ '.xen-raw.tgz' ]]; then
+        IMAGE="$FILES/${IMAGE_FNAME}"
+        IMAGE_NAME="${IMAGE_FNAME%.xen-raw.tgz}"
+        glance \
+          --os-auth-token $token \
+          --os-image-url http://$GLANCE_HOSTPORT \
+          image-create \
+            --name "$IMAGE_NAME" --is-public=True \
+            --container-format=tgz --disk-format=raw \
+            --property vm_mode=xen < "${IMAGE}"
         return
     fi
 
@@ -1418,7 +1514,6 @@ function _ping_check_novanet() {
     local check_command=""
     MULTI_HOST=`trueorfalse False $MULTI_HOST`
     if [[ "$MULTI_HOST" = "True" && "$from_net" = "$PRIVATE_NETWORK_NAME" ]]; then
-        sleep $boot_timeout
         return
     fi
     if [[ "$expected" = "True" ]]; then
@@ -1606,6 +1701,37 @@ vercmp_numbers() {
   IFS=. read -ra ver2 <<< "$v2"
 
   _vercmp_r "${#ver1[@]}" "${ver1[@]}" "${ver2[@]}"
+}
+
+
+# ``policy_add policy_file policy_name policy_permissions``
+#
+# Add a policy to a policy.json file
+# Do nothing if the policy already exists
+
+function policy_add() {
+    local policy_file=$1
+    local policy_name=$2
+    local policy_perm=$3
+
+    if grep -q ${policy_name} ${policy_file}; then
+        echo "Policy ${policy_name} already exists in ${policy_file}"
+        return
+    fi
+
+    # Add a terminating comma to policy lines without one
+    # Remove the closing '}' and all lines following to the end-of-file
+    local tmpfile=$(mktemp)
+    uniq ${policy_file} | sed -e '
+        s/]$/],/
+        /^[}]/,$d
+    ' > ${tmpfile}
+
+    # Append policy and closing brace
+    echo "    \"${policy_name}\": ${policy_perm}" >>${tmpfile}
+    echo "}" >>${tmpfile}
+
+    mv ${tmpfile} ${policy_file}
 }
 
 

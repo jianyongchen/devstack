@@ -181,7 +181,7 @@ function wait_for_VM_to_halt() {
     mgmt_ip=$(echo $XENAPI_CONNECTION_URL | tr -d -c '1234567890.')
     domid=$(xe vm-list name-label="$GUEST_NAME" params=dom-id minimal=true)
     port=$(xenstore-read /local/domain/$domid/console/vnc-port)
-    echo "vncviewer -via $mgmt_ip localhost:${port:2}"
+    echo "vncviewer -via root@$mgmt_ip localhost:${port:2}"
     while true
     do
         state=$(xe_min vm-list name-label="$GUEST_NAME" power-state=halted)
@@ -228,8 +228,11 @@ if [ -z "$templateuuid" ]; then
     $THIS_DIR/scripts/install-os-vpx.sh \
         -t "$UBUNTU_INST_TEMPLATE_NAME" \
         -n "$UBUNTU_INST_BRIDGE_OR_NET_NAME" \
-        -l "$GUEST_NAME" \
-        -r "$OSDOMU_MEM_MB"
+        -l "$GUEST_NAME"
+
+    set_vm_memory "$GUEST_NAME" "$OSDOMU_MEM_MB"
+
+    xe vm-start vm="$GUEST_NAME"
 
     # wait for install to finish
     wait_for_VM_to_halt
@@ -254,6 +257,9 @@ fi
 
 # Install XenServer tools, and other such things
 $THIS_DIR/prepare_guest_template.sh "$GUEST_NAME"
+
+# Set virtual machine parameters
+set_vm_memory "$GUEST_NAME" "$OSDOMU_MEM_MB"
 
 # start the VM to run the prepare steps
 xe vm-start vm="$GUEST_NAME"
