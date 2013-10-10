@@ -949,10 +949,17 @@ if [ $ENABLE_CONTRAIL ]; then
     fi
 
     # dependencies
-    sudo yum -y install patch scons flex bison make vim
-    sudo yum -y install expat-devel gettext-devel curl-devel
-    sudo yum -y install gcc-c++ python-devel autoconf automake
-    sudo yum -y install libevent libevent-devel libxml2-devel libxslt-devel
+    if is_ubuntu; then
+	apt_get install patch scons flex bison make vim
+	apt_get install libexpat-dev libgettextpo0 libcurl4-openssl-dev
+	apt_get install python-dev autoconf automake
+	apt_get install libevent-dev libxml2-dev libxslt-dev
+    else # yum/rpm
+	sudo yum -y install patch scons flex bison make vim
+	sudo yum -y install expat-devel gettext-devel curl-devel
+	sudo yum -y install gcc-c++ python-devel autoconf automake
+	sudo yum -y install libevent libevent-devel libxml2-devel libxslt-devel
+    fi
 
     # api server requirements
     # sudo pip install gevent==0.13.8 geventhttpclient==1.0a thrift==0.8.0
@@ -975,15 +982,28 @@ if [ $ENABLE_CONTRAIL ]; then
 
     # get cassandra
     if [ ! -f "/usr/sbin/cassandra" ] ; then
-        cat << EOF > datastax.repo
+	if is_ubuntu; then
+	    sudo tee /etc/apt/sources.list.d/cassandra.list <<EOF
+deb http://www.apache.org/dist/cassandra/debian 08x main
+EOF
+	    gpg --keyserver pgp.mit.edu --recv-keys F758CE318D77295D
+	    gpg --export --armor F758CE318D77295D | sudo apt-key add -
+	    gpg --keyserver pgp.mit.edu --recv-keys 2B5C1B00
+	    gpg --export --armor 2B5C1B00 | sudo apt-key add -
+
+	    sudo apt-get update
+	    sudo apt-get install cassandra
+	else # yum/rpm
+            cat << EOF > datastax.repo
 [datastax]
 name = DataStax Repo for Apache Cassandra
 baseurl = http://rpm.datastax.com/community
 enabled = 1
 gpgcheck = 0
 EOF
-        sudo mv datastax.repo /etc/yum.repos.d/
-        sudo yum -y install dsc20
+            sudo mv datastax.repo /etc/yum.repos.d/
+            sudo yum -y install dsc20
+	fi
     fi
 	    
     # get ifmap 
@@ -1475,9 +1495,11 @@ if [ $ENABLE_CONTRAIL ]; then
     sleep 2
     screen_it disco "python $PYLIBPATH/discovery/disc_server_zk.py --conf_file /etc/contrail/discovery.conf"
     sleep 2
-    screen_it apiSrv "python $PYLIBPATH/vnc_cfg_api_server/vnc_cfg_api_server.py --conf_file /etc/contrail/api_server.conf"
+    # find the directory where vnc_cfg_api_server was installed and start vnc_cfg_api_server.py
+    vnc_cfg_api_server_path=$(python -c 'import vnc_cfg_api_server; from os.path import dirname; print dirname(vnc_cfg_api_server.__file__)')
+    screen_it apiSrv "python ${vnc_cfg_api_server_path}/vnc_cfg_api_server.py --conf_file /etc/contrail/api_server.conf"
     echo "Waiting for api-server to start..."
-    if ! timeout $SERVICE_TIMEOUT sh -c "while ! http_proxy= wget -q -O- http://${SERVICE_HOST}:8082; do sleep 1; done"; then
+    if ! timeout $SERVICE_TIMEOUT sh -c "while ! http_proxy= wget -q -O- http://${SERVICE_HOST}:8084; do sleep 1; done"; then
         echo "api-server did not start"
         exit 1
     fi
