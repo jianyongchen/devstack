@@ -221,6 +221,16 @@ fi
 # Functions
 # ---------
 
+# use `pkill` instead of `ps aux` if pkill exists.  It's more reliable
+PKILL_CMD=$(which pkill)
+PKILL() {
+    if [ -n "$PKILL_CMD" ]; then
+	sudo $PKILL_CMD -f "$@"
+    else
+	ps wwaux | awk '/'"$1"'/ { print $2 }' | while read pid; do sudo kill "$pid"; done
+    fi
+}
+
 # configure_neutron()
 # Set common config for all neutron server and agents.
 function configure_neutron() {
@@ -453,15 +463,16 @@ function start_neutron_agents() {
     fi
 }
 
+
+
+
 # stop_neutron() - Stop running processes (non-screen)
 function stop_neutron() {
     if is_service_enabled q-dhcp; then
-        pid=$(ps aux | awk '/[d]nsmasq.+interface=(tap|ns-)/ { print $2 }')
-        [ ! -z "$pid" ] && sudo kill -9 $pid
+        PKILL '[d]nsmasq.+interface=(tap|ns-)'
     fi
     if is_service_enabled q-meta; then
-        pid=$(ps aux | awk '/neutron-ns-metadata-proxy/ { print $2 }')
-        [ ! -z "$pid" ] && sudo kill -9 $pid
+        PKILL 'neutron-ns-metadata-proxy'
     fi
 }
 
@@ -649,6 +660,14 @@ function _configure_neutron_plugin_agent() {
     iniset /$Q_PLUGIN_CONF_FILE agent root_helper "$Q_RR_COMMAND"
     iniset $NEUTRON_CONF DEFAULT verbose True
     iniset $NEUTRON_CONF DEFAULT debug $ENABLE_DEBUG_LOG_LEVEL
+
+    # Define extra "DEFAULT" configuration options when q-agt is configured by
+    # defining the array ``Q_AGENT_EXTRA_DEFAULT_OPTS``.
+    # For Example: ``Q_AGENT_EXTRA_DEFAULT_OPTS=(foo=true bar=2)``
+    for I in "${Q_AGENT_EXTRA_DEFAULT_OPTS[@]}"; do
+        # Replace the first '=' with ' ' for iniset syntax
+        iniset $NEUTRON_CONF DEFAULT ${I/=/ }
+    done
 
     # Configure agent for plugin
     neutron_plugin_configure_plugin_agent

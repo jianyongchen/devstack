@@ -1,0 +1,45 @@
+HOST_IP=10.207.65.73 # change this per compute node
+SERVICE_HOST=10.207.65.72
+
+# this doesn't write [vlans] without q-svc.  Isn't that necessary on compute?
+ENABLED_SERVICES=n-cpu,rabbit,q-agt
+
+MYSQL_HOST=$SERVICE_HOST
+RABBIT_HOST=$SERVICE_HOST
+Q_HOST=$SERVICE_HOST
+GLANCE_HOSTPORT=$SERVICE_HOST:9292
+
+STACK_DIR=$(cd $(dirname $0) && pwd)
+
+LOG=True
+DEBUG=True
+LOGFILE=$STACK_DIR/log/stack.log
+LOGDAYS=1
+
+# /etc/neutron/neutron.conf [DEFAULT]
+#Q_SRV_EXTRA_DEFAULT_OPTS=(log_config=$STACK_DIR/logging.config)
+
+# /etc/neutron/plugins/linuxbridge/linuxbridge_conf.ini [agent]
+Q_AGENT_EXTRA_AGENT_OPTS=(mvrp=True)
+
+# /etc/neutron/plugins/linuxbridge/linuxbridge_conf.ini [linux_bridge]
+# See _load_log_config in neutron/neutron/openstack/common/log.py
+Q_AGENT_EXTRA_DEFAULT_OPTS=(log_config=$STACK_DIR/logging.config)
+
+NEUTRON_REPO=/opt/stack/neutron
+
+Q_PLUGIN=linuxbridge
+Q_USE_DEBUG_COMMAND=True
+ENABLE_TENANT_VLANS=True
+TENANT_VLAN_RANGE=1000:1999
+PHYSICAL_NETWORK=default
+LB_PHYSICAL_INTERFACE=eth1
+
+DATABASE_PASSWORD=x
+RABBIT_PASSWORD=x
+SERVICE_TOKEN=x
+SERVICE_PASSWORD=x
+ADMIN_PASSWORD=x
+SERVICE_TOKEN=xyzpdqlazydog
+DATABASE_TYPE=mysql
+
